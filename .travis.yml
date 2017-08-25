@@ -1,3 +1,21 @@
+# Do not build branches of the form "pr/*". By prefixing pull requests coming
+# from branches inside the repository with pr/, this avoids building both the
+# branch push _and_ the pull request.
+branches:
+  except: /pr\/.*/
+
+language: cpp
+
+cache:
+  - apt
+
+addons:
+  apt:
+    packages:
+      - g++-6
+    sources: &sources
+      - ubuntu-toolchain-r-test
+
 matrix:
   include:
     - os: osx
