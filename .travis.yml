@@ -2,8 +2,6 @@ branches:
   except:
     - /^[0-9]/
 
-language: cpp
-
 cache:
   - apt
 
@@ -32,6 +30,7 @@ before_install:
 matrix:
   include:
     - os: osx
+      language: none
       osx_image: xcode8
       env:
         - TARGET_ARCHITECTURE=x86_64
