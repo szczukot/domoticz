@@ -1,53 +1,19 @@
-branches:
-  except:
-    - /^[0-9]/
-
-cache:
-  - apt
-
-update-alternatives:
-  - install /usr/bin/gcc gcc /usr/bin/gcc-6 50
-  - install /usr/bin/g++ g++ /usr/bin/g++-6 50
-
-sources:
-  - trusty
-
-# What to install before the build
-before_install:
-  - eval "${MATRIX_EVAL}"
-  # Domoticz needs the full history to be able to calculate the version string
-#  - git fetch --unshallow
-  # OpenZWave
-#  - git clone https://github.com/OpenZWave/open-zwave.git open-zwave-read-only
-#  - cd open-zwave-read-only;
-#  - wget https://github.com/OpenZWave/open-zwave/pull/1125.patch;
-#  - patch -p1 < 1125.patch;
-#  - make
-
-  # - ln -s open-zwave open-zwave-read-only
-
-  # Apple OSX
 matrix:
   include:
     - os: osx
-      language: none
       osx_image: xcode8
       env:
-        - TARGET_ARCHITECTURE=x86_64
+        - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
+
+    - os: osx
+      osx_image: xcode8
+      env:
+        - MATRIX_EVAL="brew install gcc5 && CC=gcc-5 && CXX=g++-5"
+
+    - os: osx
+      osx_image: xcode8
+      env:
         - MATRIX_EVAL="brew install gcc && CC=gcc-6 && CXX=g++-6"
-      install:
-        - brew install boost|| true
-        - brew install libusb
-        - brew install libusb-compat
-        - brew install zlib || true
-        - brew install openssl
-        - brew link openssl --force
-        - brew install md5sha1sum
-        - brew install python3
-        - brew linkapps python3
-        - export OPENSSL_ROOT_DIR=/usr/local/opt/openssl
-      before_script:
-        - export CXX="g++-6" CC="gcc-6"
-      script:
-        - cmake -DCMAKE_BUILD_TYPE=Release -DPYTHON_INCLUDE_DIR=$(python3-config --prefix)/Headers -DPYTHON_LIBRARY=$(python3-config --prefix)/lib/libpython3.6.dylib
-        - make
+
+before_install:
+    - eval "${MATRIX_EVAL}"
