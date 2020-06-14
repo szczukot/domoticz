@@ -1,29 +1,34 @@
 #pragma once
 
 #include <string>
-#include <vector>
-
-struct cameraActiveDevice
-{
-	uint64_t ID;
-	uint64_t DevSceneRowID;
-	unsigned char DevSceneType;
-};
-
-struct cameraDevice
-{
-	uint64_t ID;
-	std::string Name;
-    std::string Address;
-	std::string Username;
-	std::string Password;
-	int Port;
-	std::string ImageURL;
-	std::vector<cameraActiveDevice> mActiveDevices;
-};
 
 class CCameraHandler
 {
+	enum eCameraProtocol
+	{
+		CPROTOCOL_HTTP = 0,
+		CPROTOCOL_HTTPS,
+	};
+
+	struct cameraActiveDevice
+	{
+		uint64_t ID;
+		uint64_t DevSceneRowID;
+		unsigned char DevSceneType;
+	};
+
+	struct cameraDevice
+	{
+		uint64_t ID;
+		std::string Name;
+		std::string Address;
+		std::string Username;
+		std::string Password;
+		eCameraProtocol Protocol;
+		int Port;
+		std::string ImageURL;
+		std::vector<cameraActiveDevice> mActiveDevices;
+	};
 public:
 	CCameraHandler(void);
 	~CCameraHandler(void);
@@ -46,7 +51,7 @@ public:
 private:
 	void ReloadCameraActiveDevices(const std::string &CamID);
 
-	boost::mutex m_mutex;
+	std::mutex m_mutex;
 	unsigned char m_seconds_counter;
 	std::vector<cameraDevice> m_cameradevices;
 };

@@ -4,12 +4,12 @@
 #include "../main/Logger.h"
 #include "hardwaretypes.h"
 #include "../main/localtime_r.h"
-#include "../json/json.h"
+#include <json/json.h>
 #include "../main/RFXtrx.h"
 #include "../main/SQLHelper.h"
 #include "../httpclient/HTTPClient.h"
 #include "../main/mainworker.h"
-#include "../json/json.h"
+#include "../main/json_helper.h"
 
 #define round(a) ( int ) ( a + .5 )
 
@@ -17,12 +17,11 @@
 //#define DEBUG_InComfort
 #endif
 
-CInComfort::CInComfort(const int ID, const std::string &IPAddress, const unsigned short usIPPort)
+CInComfort::CInComfort(const int ID, const std::string &IPAddress, const unsigned short usIPPort):
+m_szIPAddress(IPAddress)
 {
 	m_HwdID = ID;
-	m_szIPAddress = IPAddress;
 	m_usIPPort = usIPPort;
-	m_stoprequested = false;
 
 	m_LastUpdateFrequentChangingValues = 0;
 	m_LastUpdateSlowChangingValues = 0;
@@ -35,7 +34,6 @@ CInComfort::CInComfort(const int ID, const std::string &IPAddress, const unsigne
 	m_LastCentralHeatingTemperature = 0.0;
 	m_LastCentralHeatingPressure = 0.0;
 	m_LastTapWaterTemperature = 0.0;
-	m_LastStatusText = "";
 	m_LastIO = 0;
 
 	Init();
@@ -47,26 +45,28 @@ CInComfort::~CInComfort(void)
 
 void CInComfort::Init()
 {
-	m_stoprequested = false;
 }
 
 bool CInComfort::StartHardware()
 {
+	RequestStart();
+
 	Init();
 	//Start worker thread
-	m_thread = boost::shared_ptr<boost::thread>(new boost::thread(boost::bind(&CInComfort::Do_Work, this)));
+	m_thread = std::make_shared<std::thread>(&CInComfort::Do_Work, this);
+	SetThreadNameInt(m_thread->native_handle());
 	m_bIsStarted = true;
 	sOnConnected(this);
-	return (m_thread != NULL);
+	return (m_thread != nullptr);
 }
 
 bool CInComfort::StopHardware()
 {
-	if (m_thread != NULL)
+	if (m_thread)
 	{
-		assert(m_thread);
-m_stoprequested = true;
-m_thread->join();
+		RequestStop();
+		m_thread->join();
+		m_thread.reset();
 	}
 	m_bIsStarted = false;
 	return true;
@@ -78,9 +78,8 @@ void CInComfort::Do_Work()
 {
 	int sec_counter = 0;
 	_log.Log(LOG_STATUS, "InComfort: Worker started...");
-	while (!m_stoprequested)
+	while (!IsStopRequested(1000))
 	{
-		sleep_seconds(1);
 		sec_counter++;
 		if (sec_counter % 12 == 0) {
 			mytime(&m_LastHeartbeat);
@@ -93,13 +92,13 @@ void CInComfort::Do_Work()
 	_log.Log(LOG_STATUS, "InComfort: Worker stopped...");
 }
 
-bool CInComfort::WriteToHardware(const char *pdata, const unsigned char length)
+bool CInComfort::WriteToHardware(const char * /*pdata*/, const unsigned char /*length*/)
 {
 	return true;
 }
 
 
-void CInComfort::SetSetpoint(const int idx, const float temp)
+void CInComfort::SetSetpoint(const int /*idx*/, const float temp)
 {
 	_log.Log(LOG_NORM, "InComfort: Setpoint of sensor with idx idx changed to temp");
 	std::string jsonData = SetRoom1SetTemperature(temp);
@@ -147,15 +146,14 @@ void CInComfort::GetHeaterDetails()
 	ParseAndUpdateDevices(sResult);
 }
 
-void CInComfort::SetProgramState(const int newState)
+void CInComfort::SetProgramState(const int /*newState*/)
 {
 }
 
 void CInComfort::ParseAndUpdateDevices(std::string jsonData)
 {
 	Json::Value root;
-	Json::Reader jReader;
-	bool bRet = jReader.parse(jsonData, root);
+	bool bRet = ParseJSon(jsonData, root);
 	if ((!bRet) || (!root.isObject()))
 	{
 		_log.Log(LOG_ERROR, "InComfort: Invalid data received. Data is not json formatted.");
@@ -175,8 +173,8 @@ void CInComfort::ParseAndUpdateDevices(std::string jsonData)
 	float room2OverrideTemperature = (root["room_set_ovr_2_lsb"].asInt() + root["room_set_ovr_2_msb"].asInt() * 256) / 100.0f;
 
 	int statusDisplayCode = root["displ_code"].asInt();
-	int rssi = root["rf_message_rssi"].asInt();
-	int rfStatusCounter = root["rfstatus_cntr"].asInt();
+	//int rssi = root["rf_message_rssi"].asInt();
+	//int rfStatusCounter = root["rfstatus_cntr"].asInt();
 
 	float centralHeatingTemperature = (root["ch_temp_lsb"].asInt() + root["ch_temp_msb"].asInt() * 256) / 100.0f;
 	float centralHeatingPressure = (root["ch_pressure_lsb"].asInt() + root["ch_pressure_msb"].asInt() * 256) / 100.0f;
@@ -213,7 +211,7 @@ void CInComfort::ParseAndUpdateDevices(std::string jsonData)
 		}
 
 
-	// Compare the time of the last update to the current time. 
+	// Compare the time of the last update to the current time.
 	// For items changing frequently, update the value every 5 minutes, for all others update every 15 minutes
 	time_t currentTime = mytime(NULL);
 	bool updateFrequentChangingValues = (currentTime - m_LastUpdateFrequentChangingValues) >= 300;

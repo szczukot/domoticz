@@ -5,22 +5,18 @@
 #include "LuaHandler.h"
 
 extern "C" {
-#ifdef WITH_EXTERNAL_LUA
 #include <lua.h>
 #include <lualib.h>
 #include <lauxlib.h>
-#else
-#include "../lua/src/lua.h"
-#include "../lua/src/lualib.h"
-#include "../lua/src/lauxlib.h"
-#endif
 }
 
 #include "../tinyxpath/xpath_processor.h"
-#include "../json/json.h"
+
+#include <json/json.h>
 #include "SQLHelper.h"
 #include "mainworker.h"
 #include "../hardware/hardwaretypes.h"
+#include <boost/thread.hpp>
 
 extern std::string szUserDataFolder;
 
@@ -58,28 +54,7 @@ int CLuaHandler::l_domoticz_updateDevice(lua_State* lua_state)
 			}
 			_log.Log(LOG_NORM, "CLuaHandler (updateDevice from LUA) : idx=%d nvalue=%s svalue=%s invalue=%d signallevel=%d batterylevel=%d", ideviceId, nvalue.c_str(), svalue.c_str(), invalue, signallevel, batterylevel);
 
-			// Get the raw device parameters
-			std::vector<std::vector<std::string> > result;
-			result = m_sql.safe_query("SELECT HardwareID, DeviceID, Unit, Type, SubType FROM DeviceStatus WHERE (ID==%d)", ideviceId);
-			if (result.empty())
-				return 0;
-			std::string hid = result[0][0];
-			std::string did = result[0][1];
-			std::string dunit = result[0][2];
-			std::string dtype = result[0][3];
-			std::string dsubtype = result[0][4];
-
-			int HardwareID = atoi(hid.c_str());
-			std::string DeviceID = did;
-			int unit = atoi(dunit.c_str());
-			int devType = atoi(dtype.c_str());
-			int subType = atoi(dsubtype.c_str());
-
-			std::stringstream sstr;
-			uint64_t ulIdx;
-			sstr << ideviceId;
-			sstr >> ulIdx;
-			m_mainworker.UpdateDevice(HardwareID, DeviceID, unit, devType, subType, invalue, svalue, signallevel, batterylevel);
+			m_mainworker.UpdateDevice(ideviceId, invalue, svalue, signallevel, batterylevel);
 		}
 		else
 		{
@@ -186,7 +161,9 @@ bool CLuaHandler::executeLuaScript(const std::string &script, const std::string 
 	lua_rawset(lua_state, -3);
 	lua_setglobal(lua_state, "request");
 
-	m_mainworker.m_eventsystem.ExportDeviceStatesToLua(lua_state);
+	CEventSystem::_tEventQueue item;
+	item.id = 0;
+	m_mainworker.m_eventsystem.ExportDeviceStatesToLua(lua_state, item);
 
 	// Push all url parameters as a map indexed by the parameter name
 	// Each entry will be uri[<param name>] = <param value>
@@ -211,6 +188,7 @@ bool CLuaHandler::executeLuaScript(const std::string &script, const std::string 
 	{
 		lua_sethook(lua_state, luaStop, LUA_MASKCOUNT, 10000000);
 		boost::thread aluaThread(boost::bind(&CLuaHandler::luaThread, this, lua_state, fullfilename));
+		SetThreadName(aluaThread.native_handle(), "aluaThread");
 		aluaThread.timed_join(boost::posix_time::seconds(10));
 		return true;
 	}

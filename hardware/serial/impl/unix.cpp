@@ -11,7 +11,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
-#include <sys/signal.h>
+#include <signal.h>
 #include <errno.h>
 #include <paths.h>
 #include <sysexits.h>
@@ -24,7 +24,6 @@
 #endif
 
 #include <sys/select.h>
-#include <sys/time.h>
 #include <time.h>
 #ifdef __MACH__
 #include <AvailabilityMacros.h>
